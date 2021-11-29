@@ -57,9 +57,9 @@ std::vector<double> get_traj(double curr_time, int n_dof, int ns, double step_si
     for (auto i = 0; i < ns; i++){
         for (auto j = 0; j < n_dof * 2; j++){
             // if it is one of the position states
-            if (j < n_dof) traj.push_back( amps[j%n_dof] * DEG2RAD * sin(2.0*PI*freqs[j%n_dof]*curr_time) + offsets[j%n_dof] );
+            if (j < n_dof) traj.push_back( 1 * amps[j%n_dof] * DEG2RAD * cos(2.0*PI*freqs[j%n_dof]*curr_time) + offsets[j%n_dof] - amps[j%n_dof]*DEG2RAD);
             // if it is one of the velocity states
-            else           traj.push_back( amps[j%n_dof] * DEG2RAD * 2.0 * PI * freqs[j%n_dof]*cos(2.0*PI*freqs[j%n_dof]*curr_time));
+            else           traj.push_back( -1 * amps[j%n_dof] * DEG2RAD * 2.0 * PI * freqs[j%n_dof]*sin(2.0*PI*freqs[j%n_dof]*curr_time));
             // std::cout << traj.back();
         }
         curr_time += step_size;
@@ -78,6 +78,9 @@ int main(int argc, char* argv[]) {
 		("c,calibrate", "Calibrates the MAHI Exo-II")
         ("n,no_torque", "trajectories are generated, but not torque provided")
         ("v,virtual", "example is virtual and will communicate with the unity sim")
+        ("l,linear", "example uses linear mpc model of moe instead of nonlinear")
+        ("q, q_vec", "Q vector for MPC control", mahi::util::value<std::vector<double>>())
+        ("r, r_vec", "R vector for MPC control", mahi::util::value<std::vector<double>>())
 		("h,help", "Prints this help message");
 
     auto result = options.parse(argc, argv);
@@ -148,11 +151,19 @@ int main(int argc, char* argv[]) {
                                                             {-60 * DEG2RAD, 60 * DEG2RAD}};
 
                                      // state 0    // state 1    // state 2    // state 3    // state 4    // state 5    // state 6
-    std::vector<Time> state_times = {seconds(2.0), seconds(10.0)};
+    std::vector<Time> state_times = {seconds(2.0), seconds(15.0)};
 
     casadi::Dict solver_opts;
+    
+                        //     0    1    2    3   
+    std::vector<double> Q = { 10,  10,  10,  10,  // pos
+                             0.1, 0.1, 0.1, 0.1}; // vel
+    std::vector<double> R = {  1,  20,  40,  40}; // del_U
 
-    ModelControl model_control("linear_moe", solver_opts);
+    if (result.count("q_vec")) Q = result["q_vec"].as<std::vector<double>>();
+    if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
+
+    ModelControl model_control(result.count("linear") ? "linear_moe" : "moe", Q, R);
 
     // setup trajectories
 
@@ -162,8 +173,16 @@ int main(int argc, char* argv[]) {
 
     std::vector<double> ref;
 
-    // waypoints                                   Elbow F/E       Forearm P/S   Wrist F/E     Wrist R/U     LastDoF
-    WayPoint neutral_point = WayPoint(Time::Zero, {-35 * DEG2RAD,  00 * DEG2RAD, 00  * DEG2RAD, 00 * DEG2RAD});
+    double freq_factor = 0.5;
+
+	std::vector<double> sin_amplitudes = {30.0, 30.0, 30.0, 30.0};
+	std::vector<double> sin_frequencies = {0.26*freq_factor, 0.36*freq_factor, 0.57*freq_factor, 0.82*freq_factor};
+
+    // waypoints  
+    WayPoint neutral_point = WayPoint(Time::Zero, {(-35+sin_amplitudes[0]) * DEG2RAD,   // Elbow F/E
+                                                   ( 00+sin_amplitudes[1]) * DEG2RAD,   // Forearm P/S
+                                                   ( 00+sin_amplitudes[2])  * DEG2RAD,  // Wrist F/E
+                                                   (-10+sin_amplitudes[3]) * DEG2RAD}); // wrist R/U
 
     // construct timer in hybrid mode to avoid using 100% CPU
     Timer timer(Ts, Timer::Hybrid);
@@ -201,8 +220,6 @@ int main(int argc, char* argv[]) {
 	
     moe->enable();
 	
-	std::vector<double> sin_amplitudes = {30.0, 30.0, 30.0, 30.0};
-	std::vector<double> sin_frequencies = {0.1, 0.2, 0.3, 0.4};
 
 
     std::vector<double> traj = get_traj(0, moe->n_j, model_control.model_parameters.num_shooting_nodes, 
@@ -221,9 +238,9 @@ int main(int argc, char* argv[]) {
 
     auto initial_mpc_state = neutral_point.get_pos();
     for (auto i = 0; i < moe->n_j; i++) initial_mpc_state.push_back(0);
-    std::vector<double> initial_mpc_control = {-1.19762,-0.104455,-0.142883,0.0534922};
+    std::vector<double> initial_mpc_control = {0.564337,0.315839,-0.10178,0.0989638};
     
-    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, {0,0,0,0}, traj);
+    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, initial_mpc_control, traj);
     model_control.start_calc();
 
     WayPoint start_pos(Time::Zero, moe->get_joint_positions());
@@ -240,11 +257,14 @@ int main(int argc, char* argv[]) {
         if (current_state != wrist_circle) {
             // update reference from trajectory
             ref = mj.trajectory().at_time(ref_traj_clock.get_elapsed_time());
+
+            traj = get_traj(0.0, moe->n_j, model_control.model_parameters.num_shooting_nodes, 
+                            model_control.model_parameters.step_size.as_seconds(), sin_amplitudes, sin_frequencies, neutral_point.get_pos());
+            model_control.set_state(mahi::util::seconds(0), get_state(moe), command_torques, traj);
         } 
         else {
             traj = get_traj(ref_traj_clock.get_elapsed_time().as_seconds(), moe->n_j, model_control.model_parameters.num_shooting_nodes, 
                             model_control.model_parameters.step_size.as_seconds(), sin_amplitudes, sin_frequencies, neutral_point.get_pos());
-            command_torques[3] *= 0;
             static bool first_time = true;
             // if (first_time) std::cout << traj << std::endl;
             first_time = false;
