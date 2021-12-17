@@ -33,5 +33,11 @@ add_definitions(-D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -D_WINSOCK_DEPRECATED_NO_WA
 add_executable(rom_demo_mpc src/rom_demo_mpc.cpp)
 target_link_libraries(rom_demo_mpc moe mahi::mpc)
 
+add_executable(rom_demo_mpc_one_dof src/rom_demo_mpc_one_dof.cpp)
+target_link_libraries(rom_demo_mpc_one_dof moe mahi::mpc)
+
 add_executable(moe_model_generate src/moe_model_generate.cpp)
 target_link_libraries(moe_model_generate moe mahi::mpc)
+
+add_executable(moe_model_generate_one_dof src/moe_model_generate_one_dof.cpp)
+target_link_libraries(moe_model_generate_one_dof moe mahi::mpc)
