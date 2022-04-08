@@ -70,8 +70,6 @@ std::vector<double> get_traj(double curr_time, int n_dof, int ns, double step_si
 }
 
 int main(int argc, char* argv[]) {
-    // register ctrl-c handler
-    register_ctrl_handler(handler);
 
     // make options
     Options options("ex_pos_control_nathan.exe", "Nathan's Position Control Demo");
@@ -164,12 +162,22 @@ int main(int argc, char* argv[]) {
     std::vector<double> Q = {  10,   25,   20,   60,  // pos
                              0.10, 0.05, 0.05, 0.05}; // vel
     std::vector<double> R = {   3,   20,   40,   40}; // del_U
+    std::vector<double> Rm ={  0,   0,   0,   0}; // magnitude
+    std::vector<double> P = {  0,   0,   0,   0}; // integral
+
+    std::vector<double> mpc_integral = {0,0,0,0};
 
     if (result.count("q_vec")) Q = result["q_vec"].as<std::vector<double>>();
     if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
 
-    ModelControl model_control(result.count("linear") ? "linear_moe" : "moe", Q, R);
+    std::cout << "before " << std::endl;
 
+    ModelControl model_control(result.count("linear") ? "linear_moe" : "moe", Q, R, Rm, P);
+
+    // register ctrl-c handler
+    register_ctrl_handler(handler);
+
+    std::cout << "after " << std::endl;
     // setup trajectories
 
     double t = 0;
@@ -245,7 +253,7 @@ int main(int argc, char* argv[]) {
     for (auto i = 0; i < moe->n_j; i++) initial_mpc_state.push_back(0);
     std::vector<double> initial_mpc_control = {0,0,0,0};
     
-    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, initial_mpc_control, traj);
+    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, initial_mpc_control, traj, mpc_integral);
     model_control.start_calc();
 
     WayPoint start_pos(Time::Zero, moe->get_joint_positions());
@@ -265,7 +273,7 @@ int main(int argc, char* argv[]) {
 
             traj = get_traj(0.0, moe->n_j, model_control.model_parameters.num_shooting_nodes, 
                             model_control.model_parameters.step_size.as_seconds(), sin_amplitudes, sin_frequencies, neutral_point.get_pos());
-            model_control.set_state(mahi::util::seconds(0), get_state(moe), command_torques, traj);
+            model_control.set_state(mahi::util::seconds(0), get_state(moe), command_torques, traj, mpc_integral);
         } 
         else {
             traj = get_traj(ref_traj_clock.get_elapsed_time().as_seconds(), moe->n_j, model_control.model_parameters.num_shooting_nodes, 
@@ -273,7 +281,7 @@ int main(int argc, char* argv[]) {
             static bool first_time = true;
             // if (first_time) std::cout << traj << std::endl;
             first_time = false;
-            model_control.set_state(ref_traj_clock.get_elapsed_time(), get_state(moe), command_torques, traj);
+            model_control.set_state(ref_traj_clock.get_elapsed_time(), get_state(moe), command_torques, traj, mpc_integral);
         }
 
         // constrain trajectory to be within range

@@ -153,6 +153,8 @@ int main(int argc, char* argv[]) {
     std::vector<double> Q = { 15,  10,  10,  10,  // pos
                              0.1, 0.1, 0.1, 0.1}; // vel
     std::vector<double> R = {  5,  20,  40,  40}; // del_U
+    std::vector<double> Rm = {0.0};
+    std::vector<double> P = {0.0};
 
     int dof = result.count("dof") ? result["dof"].as<int>() : 0;   
 
@@ -162,8 +164,10 @@ int main(int argc, char* argv[]) {
     if (result.count("q_vec")) Q = result["q_vec"].as<std::vector<double>>();
     if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
 
-    ModelControl model_control(result.count("linear") ? ("linear_moe_j"+std::to_string(dof)) : ("moe_j"+std::to_string(dof)), Q, R);
+    ModelControl model_control(result.count("linear") ? ("linear_moe_j"+std::to_string(dof)) : ("moe_j"+std::to_string(dof)), Q, R, Rm, P);
 
+    // register ctrl-c handler
+    register_ctrl_handler(handler);
 
     // setup trajectories
 
@@ -241,7 +245,7 @@ int main(int argc, char* argv[]) {
     std::vector<double> initial_mpc_state = {neutral_point.get_pos()[dof], 0};
     std::vector<double> initial_mpc_control = {0};
     
-    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, initial_mpc_control, traj);
+    model_control.set_state(mahi::util::seconds(0), initial_mpc_state, initial_mpc_control, traj, {0.0});
     model_control.start_calc();
     sleep(300_ms);
 
@@ -269,7 +273,7 @@ int main(int argc, char* argv[]) {
 
             traj = get_traj(0.0, dof, model_control.model_parameters.num_shooting_nodes, 
                             model_control.model_parameters.step_size.as_seconds(), sin_amplitudes, sin_frequencies, neutral_point.get_pos());
-            model_control.set_state(mahi::util::seconds(0), get_state(moe, dof), {command_torques[dof]}, traj);
+            model_control.set_state(mahi::util::seconds(0), get_state(moe, dof), {command_torques[dof]}, traj, {0.0});
         } 
         else {
             ref = neutral_point.get_pos();
@@ -277,7 +281,7 @@ int main(int argc, char* argv[]) {
                             model_control.model_parameters.step_size.as_seconds(), sin_amplitudes, sin_frequencies, neutral_point.get_pos());
             static bool first_time = true;
             first_time = false;
-            model_control.set_state(ref_traj_clock.get_elapsed_time(), get_state(moe, dof), {command_torques[dof]}, traj);
+            model_control.set_state(ref_traj_clock.get_elapsed_time(), get_state(moe, dof), {command_torques[dof]}, traj, {0.0});
         }
 
         // constrain trajectory to be within range

@@ -115,5 +115,6 @@ int main(int argc, char* argv[])
     my_generator.generate_c_code();
     my_generator.compile_model();
 
+    std::cout << "Finished generating models" << std::endl;
     return 0;
 }

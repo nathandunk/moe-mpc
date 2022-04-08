@@ -24,7 +24,7 @@ FetchContent_MakeAvailable(moe)
 
 # MAHI MPC
 FetchContent_Declare(mahi-mpc GIT_REPOSITORY https://github.com/mahilab/mahi-mpc.git
-                              GIT_TAG        origin/parallelize-update)
+                              GIT_TAG        origin/main)
 FetchContent_MakeAvailable(mahi-mpc)
 
 FetchContent_Declare(mahi-gui GIT_REPOSITORY https://github.com/mahilab/mahi-gui.git
