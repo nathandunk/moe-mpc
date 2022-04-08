@@ -65,8 +65,10 @@ int main(int argc, char* argv[])
 
     SX q_dot = SX::vertcat({q0_dot,q1_dot,q2_dot,q3_dot});
 
-    std::vector<double>  B_coef = {0.1215, 0.0252, 0.0019, 0.0029};
-    std::vector<double> Fk_coef = {   0.5, 0.1891, 0.0541, 0.1339};
+    // std::vector<double>  B_coef = {0.1215, 0.0252, 0.0019, 0.0029};
+    // std::vector<double> Fk_coef = {   0.5, 0.1891, 0.0541, 0.1339};
+    std::vector<double>  B_coef = {0.0393, 0.0691, 0.0068, 0.0025};
+    std::vector<double> Fk_coef = {0.1838, 0.1572, 0.0996, 0.1685};
 
     SX B = SX::vertcat({B_coef[0]*q0_dot*1.0, B_coef[1]*q1_dot*1.0, B_coef[2]*q2_dot*1.0, B_coef[3]*q3_dot*1.0});
     SX Fk = SX::vertcat({Fk_coef[0]*tanh(q0_dot*10.0), Fk_coef[1]*tanh(q1_dot*10.0), Fk_coef[2]*tanh(q2_dot*10.0), Fk_coef[3]*tanh(q3_dot*10.0)});

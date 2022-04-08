@@ -27,11 +27,18 @@ FetchContent_Declare(mahi-mpc GIT_REPOSITORY https://github.com/mahilab/mahi-mpc
                               GIT_TAG        origin/parallelize-update)
 FetchContent_MakeAvailable(mahi-mpc)
 
+FetchContent_Declare(mahi-gui GIT_REPOSITORY https://github.com/mahilab/mahi-gui.git
+                              GIT_TAG        origin/plotter)
+FetchContent_MakeAvailable(mahi-gui)
+
 # add definitions
 add_definitions(-D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -D_WINSOCK_DEPRECATED_NO_WARNINGS)
 
 add_executable(rom_demo_mpc src/rom_demo_mpc.cpp)
-target_link_libraries(rom_demo_mpc moe mahi::mpc)
+target_link_libraries(rom_demo_mpc moe mahi::mpc mahi::gui)
+
+add_executable(paper_video src/paper_video.cpp)
+target_link_libraries(paper_video moe mahi::mpc mahi::gui)
 
 add_executable(rom_demo_mpc_one_dof src/rom_demo_mpc_one_dof.cpp)
 target_link_libraries(rom_demo_mpc_one_dof moe mahi::mpc)

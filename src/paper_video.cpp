@@ -16,7 +16,19 @@ using namespace moe;
 using mahi::robo::WayPoint;
 
 enum state {
-    to_neutral_0,     // 0
+    to_neutral_0,
+    to_efe_min,
+    to_efe_max,
+    to_neutral_1,
+    to_fps_min,
+    to_fps_max,
+    to_neutral_2,
+    to_wfe_min,
+    to_wfe_max,
+    to_neutral_3,
+    to_wru_min,
+    to_wru_max,
+    to_neutral_4,
     wrist_circle,     // 1
 };
 
@@ -39,6 +51,18 @@ void to_state(state& current_state_, const state next_state_, WayPoint current_p
     current_state_ = next_state_;
     ref_traj_clock_.restart();
 }
+
+WayPoint get_min_max_values(WayPoint neutral, std::array<double,4> min_values, std::array<double,4> max_values, int joint_num, bool is_max){
+    if (is_max) {
+        neutral[joint_num] = max_values[joint_num];
+    }
+    else {
+        neutral[joint_num] = min_values[joint_num];
+    }
+    std::cout << "joint " << joint_num << (is_max ? " max: " : " min: ") << neutral.get_pos() << std::endl;
+    return neutral;
+}
+
 
 // returns vector of position and velocity of moe
 std::vector<double> get_state(std::shared_ptr<Moe> moe_ptr){
@@ -156,7 +180,20 @@ int main(int argc, char* argv[]) {
                                                             {-60 * DEG2RAD, 60 * DEG2RAD}};
 
                                      // state 0    // state 1    // state 2    // state 3    // state 4    // state 5    // state 6
-    std::vector<Time> state_times = {seconds(2.0), seconds(15.0)};
+    std::vector<Time> state_times = {seconds(2.0),   // to_neutral_0
+                                     seconds(3.0),   // to_efe_min
+                                     seconds(5.0),   // to_efe_max
+                                     seconds(2.0),   // to_neutral_1
+                                     seconds(3.0),   // to_fps_min
+                                     seconds(5.0),   // to_fps_max
+                                     seconds(2.0),   // to_neutral_4
+                                     seconds(3.0),   // to_wfe_min
+                                     seconds(5.0),   // to_wfe_max
+                                     seconds(2.0),   // to_neutral_3
+                                     seconds(3.0),   // to_wru_min
+                                     seconds(5.0),   // to_wru_max
+                                     seconds(2.0),   // to_neutral_4
+                                     seconds(15.0)}; // wrist_circle 
 
     casadi::Dict solver_opts;
     
@@ -169,6 +206,8 @@ int main(int argc, char* argv[]) {
     if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
 
     ModelControl model_control(result.count("linear") ? "linear_moe" : "moe", Q, R);
+
+    std::cout << "here";
 
     // setup trajectories
 
@@ -209,7 +248,7 @@ int main(int argc, char* argv[]) {
     Time traj_length;
     WayPoint dummy_waypoint = WayPoint(Time::Zero, {-35 * DEG2RAD,  00 * DEG2RAD, 00  * DEG2RAD, 00 * DEG2RAD});
     MinimumJerk mj(mj_Ts, dummy_waypoint, neutral_point.set_time(state_times[to_neutral_0]));
-    std::vector<double> traj_max_diff = { 50 * DEG2RAD, 50 * DEG2RAD, 35 * DEG2RAD, 35 * DEG2RAD};
+    std::vector<double> traj_max_diff = { 90 * DEG2RAD, 90 * DEG2RAD, 90 * DEG2RAD, 90 * DEG2RAD};
 	mj.set_trajectory_params(Trajectory::Interp::Linear, traj_max_diff);
     Clock ref_traj_clock;
 
@@ -224,7 +263,7 @@ int main(int argc, char* argv[]) {
 	moe->daq_enable();
 	
     moe->enable();
-	
+	std::cout << "here";
 
 
     std::vector<double> traj = get_traj(0, moe->n_j, model_control.model_parameters.num_shooting_nodes, 
@@ -250,7 +289,9 @@ int main(int argc, char* argv[]) {
 
     WayPoint start_pos(Time::Zero, moe->get_joint_positions());
 
-    mj.set_endpoints(start_pos, neutral_point.set_time(state_times[to_neutral_0]));
+    auto base_waypoint = WayPoint(Time::Zero, {-35 * DEG2RAD,  00 * DEG2RAD, 00  * DEG2RAD, 00 * DEG2RAD});
+
+    mj.set_endpoints(start_pos, base_waypoint.set_time(state_times[to_neutral_0]));
 
     while (!stop) {
         // update all DAQ input channels
@@ -277,9 +318,9 @@ int main(int argc, char* argv[]) {
         }
 
         // constrain trajectory to be within range
-        for (std::size_t i = 0; i < moe->n_j; ++i) {
-            ref[i] = clamp(ref[i], setpoint_rad_ranges[i][0], setpoint_rad_ranges[i][1]);
-        }
+        // for (std::size_t i = 0; i < moe->n_j; ++i) {
+        //     ref[i] = clamp(ref[i], setpoint_rad_ranges[i][0], setpoint_rad_ranges[i][1]);
+        // }
         
         // calculate anatomical command torques
         if (result.count("no_torque") > 0){
@@ -306,9 +347,47 @@ int main(int argc, char* argv[]) {
 
         // if enough time has passed, continue to the next state. See to_state function at top of file for details
         if (ref_traj_clock.get_elapsed_time() > state_times[current_state]) {
-
+            // base_waypoint = WayPoint(Time::Zero, {-35 * DEG2RAD,  00 * DEG2RAD, 00  * DEG2RAD, 00 * DEG2RAD});
+            auto min_vals = moe->params_.pos_limits_min_;
+            auto max_vals = moe->params_.pos_limits_max_;
             switch (current_state) {
                 case to_neutral_0:
+                    to_state(current_state, to_efe_min, base_waypoint, get_min_max_values(base_waypoint,min_vals,max_vals,0,0), state_times[to_efe_min], mj, ref_traj_clock);
+                    break;
+                case to_efe_min:
+                    to_state(current_state, to_efe_max, get_min_max_values(base_waypoint,min_vals,max_vals,0,0), get_min_max_values(base_waypoint,min_vals,max_vals,0,1), state_times[to_efe_max], mj, ref_traj_clock);
+                    break;
+                case to_efe_max:
+                    to_state(current_state, to_neutral_1, get_min_max_values(base_waypoint,min_vals,max_vals,0,1), base_waypoint, state_times[to_neutral_1], mj, ref_traj_clock);
+                    break;
+                case to_neutral_1:
+                    to_state(current_state, to_fps_min, base_waypoint, get_min_max_values(base_waypoint,min_vals,max_vals,1,0), state_times[to_fps_min], mj, ref_traj_clock);
+                    break;
+                case to_fps_min:
+                    to_state(current_state, to_fps_max, get_min_max_values(base_waypoint,min_vals,max_vals,1,0), get_min_max_values(base_waypoint,min_vals,max_vals,1,1), state_times[to_fps_max], mj, ref_traj_clock);
+                    break;
+                case to_fps_max:
+                    to_state(current_state, to_neutral_2, get_min_max_values(base_waypoint,min_vals,max_vals,1,1), base_waypoint, state_times[to_neutral_2], mj, ref_traj_clock);
+                    break;
+                case to_neutral_2:
+                    to_state(current_state, to_wfe_min, base_waypoint, get_min_max_values(base_waypoint,min_vals,max_vals,2,0), state_times[to_wfe_min], mj, ref_traj_clock);
+                    break;
+                case to_wfe_min:
+                    to_state(current_state, to_wfe_max, get_min_max_values(base_waypoint,min_vals,max_vals,2,0), get_min_max_values(base_waypoint,min_vals,max_vals,2,1), state_times[to_wfe_max], mj, ref_traj_clock);
+                    break;
+                case to_wfe_max:
+                    to_state(current_state, to_neutral_3, get_min_max_values(base_waypoint,min_vals,max_vals,2,1), base_waypoint, state_times[to_neutral_3], mj, ref_traj_clock);
+                    break;
+                case to_neutral_3:
+                    to_state(current_state, to_wru_min, base_waypoint, get_min_max_values(base_waypoint,min_vals,max_vals,3,0), state_times[to_wru_min], mj, ref_traj_clock);
+                    break;
+                case to_wru_min:
+                    to_state(current_state, to_wru_max, get_min_max_values(base_waypoint,min_vals,max_vals,3,0), get_min_max_values(base_waypoint,min_vals,max_vals,3,1), state_times[to_wru_max], mj, ref_traj_clock);
+                    break;
+                case to_wru_max:
+                    to_state(current_state, to_neutral_4, get_min_max_values(base_waypoint,min_vals,max_vals,3,1), neutral_point, state_times[to_neutral_4], mj, ref_traj_clock);
+                    break;
+                case to_neutral_4:
                     to_state(current_state, wrist_circle, neutral_point, neutral_point, state_times[wrist_circle], mj, ref_traj_clock);
                     break;
                 case wrist_circle:
@@ -341,9 +420,15 @@ int main(int argc, char* argv[]) {
         // update all DAQ output channels
         if (!stop) moe->daq_write_all();
 
-        plot_helper.add_data("EFE Ref", traj[0]);
+        plot_helper.add_data("EFE Ref", ref[0]);
         plot_helper.add_data("EFE Pos", moe->get_joint_position(0));
-        plot_helper.add_data("EFE Torque", moe->get_joint_command_torque(0));
+        plot_helper.add_data("FPS Ref", ref[1]);
+        plot_helper.add_data("FPS Pos", moe->get_joint_position(1));
+        plot_helper.add_data("WFE Ref", ref[2]);
+        plot_helper.add_data("WFE Pos", moe->get_joint_position(2));
+        plot_helper.add_data("WRU Ref", ref[3]);
+        plot_helper.add_data("WRU Pos", moe->get_joint_position(3));
+
         plot_helper.write_data();
 
         // ms_ref.write_data(moe->get_joint_positions());
