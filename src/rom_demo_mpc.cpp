@@ -177,7 +177,6 @@ int main(int argc, char* argv[]) {
     // register ctrl-c handler
     register_ctrl_handler(handler);
 
-    std::cout << "after " << std::endl;
     // setup trajectories
 
     double t = 0;

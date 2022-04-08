@@ -62,8 +62,6 @@ std::vector<double> get_traj(double curr_time, int dof, int ns, double step_size
 }
 
 int main(int argc, char* argv[]) {
-    // register ctrl-c handler
-    register_ctrl_handler(handler);
 
     // make options
     Options options("ex_pos_control_nathan.exe", "Nathan's Position Control Demo");
@@ -165,6 +163,9 @@ int main(int argc, char* argv[]) {
     if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
 
     ModelControl model_control(result.count("linear") ? ("linear_moe_j"+std::to_string(dof)) : ("moe_j"+std::to_string(dof)), Q, R, Rm, P);
+    
+    // register ctrl-c handler
+    register_ctrl_handler(handler);
 
     // register ctrl-c handler
     register_ctrl_handler(handler);
