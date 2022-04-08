@@ -69,8 +69,6 @@ std::vector<double> get_traj(double curr_time, int n_dof, int ns, double step_si
 }
 
 int main(int argc, char* argv[]) {
-    // register ctrl-c handler
-    register_ctrl_handler(handler);
 
     // make options
     Options options("ex_pos_control_nathan.exe", "Nathan's Position Control Demo");
@@ -168,6 +166,9 @@ int main(int argc, char* argv[]) {
     if (result.count("r_vec")) R = result["r_vec"].as<std::vector<double>>();
 
     ModelControl model_control(result.count("linear") ? "linear_moe" : "moe", Q, R, Rm, P);
+
+    // register ctrl-c handler
+    register_ctrl_handler(handler);
 
     // setup trajectories
 
